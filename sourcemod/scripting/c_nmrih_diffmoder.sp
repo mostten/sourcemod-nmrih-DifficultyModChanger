@@ -7,58 +7,58 @@
 static const float	VOTE_LIMIT			= 0.6;
 static const int	MENUDISPLAY_TIME	= 20;
 static const char sModVote[][] = {
+	"ModMenuDefVote",
 	"ModMenuRunerVote",
-	"ModMenuKidVote",
-	"ModMenuDefVote"
+	"ModMenuKidVote"
 };
 static const char sDifVote[][] =
 {
+	"DifMenuDefVote",
 	"DifMenuClassicVote",
 	"DifMenuCasualVote",
-	"DifMenuNightmareVote",
-	"DifMenuDefVote"
+	"DifMenuNightmareVote"
 },
 	sConfVote[][] =
 {
+	"ConfMenuDefaultVote",
 	"ConfMenuRealismVote",
 	"ConfMenuFriendlyVote",
 	"ConfMenuHardcoreVote",
-	"ConfMenuInfinityVote",
-	"ConfMenuDefaultVote"
+	"ConfMenuInfinityVote"
 },
 	sModItem[][] =
 {
+	"ModMenuItemDefault",
 	"ModMenuItemRunner",
-	"ModMenuItemKid",
-	"ModMenuItemDefault"
+	"ModMenuItemKid"
 },
 	sDifItem[][] =
 {
+	"DifMenuItemDefault",
 	"DifMenuItemClassic",
 	"DifMenuItemCasual",
-	"DifMenuItemNightmare",
-	"DifMenuItemDefault"
+	"DifMenuItemNightmare"
 };
 
 enum GameMod{
+	GameMod_Default,
 	GameMod_Runner,
-	GameMod_Kid,
-	GameMod_Default
+	GameMod_Kid
 }
 
 enum GameDif{
+	GameDif_Default,
 	GameDif_Classic,
 	GameDif_Casual,
-	GameDif_Nightmare,
-	GameDif_Default
+	GameDif_Nightmare
 }
 
 enum GameConf{
+	GameConf_Default,
 	GameConf_Realism,
 	GameConf_Friendly,
 	GameConf_Hardcore,
-	GameConf_Infinity,
-	GameConf_Default
+	GameConf_Infinity
 }
 
 ConVar sv_max_runner_chance,
@@ -67,15 +67,18 @@ ConVar sv_max_runner_chance,
 	sv_realism, mp_friendlyfire,
 	sv_hardcore_survival,
 	sv_difficulty;
-bool g_bSVRealism_default,
-	g_bMpFriendlyFire_default,
-	g_bSVHardcore_default, g_bEnable;
+bool g_bEnable_cfg,
+	g_bFriendly_cfg,
+	g_bRealism_cfg,
+	g_bHardcore_cfg;
 float g_fMax_runner_chance_default,
 	g_fRunner_chance_default,
 	g_fRunner_kid_chance_default;
-char g_cSVDifficult_default[32];
-int g_iInfinity_default;
-GameMod g_eMod = GameMod_Default;
+char g_cSVDifficult_default[32],
+	g_cSVDifficult_cfg[32];
+int g_iInfinity_cfg,
+	g_iGamemode_cfg;
+
 public Plugin myinfo =
 {
 	name		= "[NMRiH] Difficult Moder",
@@ -95,19 +98,27 @@ public void OnPluginStart()
 	(ov_runner_kid_chance = FindConVar("ov_runner_kid_chance")).AddChangeHook(OnConVarChanged);
 	g_fRunner_kid_chance_default = ov_runner_kid_chance.FloatValue;
 	(sv_realism = FindConVar("sv_realism")).AddChangeHook(OnConVarChanged);
-	g_bSVRealism_default = sv_realism.BoolValue;
 	(mp_friendlyfire = FindConVar("mp_friendlyfire")).AddChangeHook(OnConVarChanged);
-	g_bMpFriendlyFire_default = mp_friendlyfire.BoolValue;
 	(sv_hardcore_survival = FindConVar("sv_hardcore_survival")).AddChangeHook(OnConVarChanged);
-	g_bSVHardcore_default = sv_hardcore_survival.BoolValue;
 	(sv_difficulty = FindConVar("sv_difficulty")).AddChangeHook(OnConVarChanged);
 	sv_difficulty.GetString(g_cSVDifficult_default, sizeof(g_cSVDifficult_default));
 	
 	ConVar CVar;
 	(CVar = CreateConVar("nmrih_diffmoder", "1", "Enable/Disable plugin.", FCVAR_NOTIFY, true, 0.0, true, 1.0)).AddChangeHook(OnConVarChanged_Enable);
-	g_bEnable = CVar.BoolValue;
+	g_bEnable_cfg = CVar.BoolValue;
 	CVar = CreateConVar("nmrih_diffmoder_infinity_default", "0", "0 - Normal ammo/clip, 1 - Infinite ammo, 2 -  Infinite clip.", FCVAR_NONE, true, 0.0, true, 1.0);
-	g_iInfinity_default = CVar.IntValue;
+	g_iInfinity_cfg = CVar.IntValue;
+	CVar = CreateConVar("nmrih_diffmoder_gamemode_default", "0", "0 - default gamemode, 1 - All runners, 2 - All kids", 0, true, 0.0, true, 2.0);
+	g_iGamemode_cfg = CVar.IntValue;
+	CVar = CreateConVar("nmrih_diffmoder_friendly_default", "0", "Friendly fire: 0 - off, 1 - on", 0, true, 0.0, true, 1.0);
+	g_bFriendly_cfg = CVar.BoolValue;
+	CVar = CreateConVar("nmrih_diffmoder_realism_default", "0", "Realism: 0 - off, 1 - on", 0, true, 0.0, true, 1.0);
+	g_bRealism_cfg = CVar.BoolValue;
+	CVar = CreateConVar("nmrih_diffmoder_hardcore_default", "0", "Hardcore survival: 0 - off, 1 - on", 0, true, 0.0, true, 1.0);
+	g_bHardcore_cfg = CVar.BoolValue;
+	CVar = CreateConVar("nmrih_diffmoder_difficulty_default", g_cSVDifficult_default, "Difficulty: classic, casual, nightmare");
+	CVar.GetString(g_cSVDifficult_cfg, sizeof(g_cSVDifficult_cfg));
+	AutoExecConfig();
 	delete CVar;
 	
 	//Reg Cmd
@@ -116,6 +127,7 @@ public void OnPluginStart()
 
 	//event
 	HookEvent("nmrih_round_begin", Event_RoundBegin);
+	GameMod_Init();
 }
 
 public void OnConVarChanged(ConVar CVar, const char[] oldValue, const char[] newValue)
@@ -131,9 +143,14 @@ public void OnConVarChanged(ConVar CVar, const char[] oldValue, const char[] new
 
 public void OnConVarChanged_Enable(ConVar CVar, const char[] oldValue, const char[] newValue)
 {
-	g_bEnable = CVar.BoolValue;
-	if(g_bEnable) HookEvent("nmrih_round_begin", Event_RoundBegin);
+	g_bEnable_cfg = CVar.BoolValue;
+	if(g_bEnable_cfg) HookEvent("nmrih_round_begin", Event_RoundBegin);
 	else UnhookEvent("nmrih_round_begin", Event_RoundBegin);
+}
+
+void GameMod_Init()
+{
+	GameMod_Enable(GameMod_Runner);
 }
 
 void ConVars_InitDefault()
@@ -155,7 +172,7 @@ public void OnPluginEnd()
 
 public void OnEntityCreated(int entity, const char[] classname)
 {
-	if(!g_bEnable) return;
+	if(!g_bEnable_cfg) return;
 
 	if((entity > MaxClients) && IsValidEntity(entity)
 	&& StrEqual(classname, "npc_nmrih_shamblerzombie", false))
@@ -164,7 +181,7 @@ public void OnEntityCreated(int entity, const char[] classname)
 
 public void OnEntityDestroyed(int entity)
 {
-	if(g_bEnable && IsValidShamblerzombie(entity)) SDKUnhook(entity, SDKHook_SpawnPost, SDKHookCB_ZombieSpawnPost);
+	if(g_bEnable_cfg && IsValidShamblerzombie(entity)) SDKUnhook(entity, SDKHook_SpawnPost, SDKHookCB_ZombieSpawnPost);
 }
 
 bool IsValidShamblerzombie(int zombie)
@@ -178,7 +195,7 @@ bool IsValidShamblerzombie(int zombie)
 
 public void SDKHookCB_ZombieSpawnPost(int zombie)
 {
-	if(!g_bEnable || !IsValidEntity(zombie) || !IsValidShamblerzombie(zombie))
+	if(!g_bEnable_cfg || !IsValidEntity(zombie) || !IsValidShamblerzombie(zombie))
 		SDKUnhook(zombie, SDKHook_SpawnPost, SDKHookCB_ZombieSpawnPost);
 
 	float orgin[3];
@@ -228,7 +245,7 @@ int FastZombie_Create(float orgin[3], bool isKid = false)
 
 public void Event_RoundBegin(Event event, const char[] name, bool dontBroadcast)
 {
-	if(g_bEnable) GameInfo_ShowToAll();
+	if(g_bEnable_cfg) GameInfo_ShowToAll();
 	else UnhookEvent("nmrih_round_begin", Event_RoundBegin);
 }
 
@@ -246,15 +263,14 @@ void GameConfig_Enable(GameConf conf, bool on = true)
 
 void GameConfig_Def()
 {
-	sv_realism.BoolValue = g_bSVRealism_default;
-	mp_friendlyfire.BoolValue = g_bMpFriendlyFire_default;
-	sv_hardcore_survival.BoolValue = g_bSVHardcore_default;
-	ServerCommand("sm_inf_ammo %d", g_iInfinity_default);
+	sv_realism.BoolValue = g_bRealism_cfg;
+	mp_friendlyfire.BoolValue = g_bFriendly_cfg;
+	sv_hardcore_survival.BoolValue = g_bHardcore_cfg;
+	ServerCommand("sm_inf_ammo %d", g_iInfinity_cfg);
 }
 
 void GameMod_Enable(GameMod mod)
 {
-	g_eMod = mod;
 	switch(mod)
 	{
 		case GameMod_Runner:
@@ -270,10 +286,17 @@ void GameMod_Enable(GameMod mod)
 
 void GameMod_Def()
 {
-	g_eMod = GameMod_Default;
-	sv_max_runner_chance.FloatValue = g_fMax_runner_chance_default;
-	ov_runner_chance.FloatValue = g_fRunner_chance_default;
-	ov_runner_kid_chance.FloatValue = g_fRunner_kid_chance_default;
+	switch(view_as<GameMod>(g_iGamemode_cfg))
+	{
+		case GameMod_Runner:{GameMod_Enable(GameMod_Runner);}
+		case GameMod_Kid:{GameMod_Enable(GameMod_Kid);}
+		default:
+		{
+			sv_max_runner_chance.FloatValue = g_fMax_runner_chance_default;
+			ov_runner_chance.FloatValue = g_fRunner_chance_default;
+			ov_runner_kid_chance.FloatValue = g_fRunner_kid_chance_default;
+		}
+	}
 }
 
 void GameDiff_Enable(GameDif dif)
@@ -289,28 +312,31 @@ void GameDiff_Enable(GameDif dif)
 
 void GameDiff_Def()
 {
-	sv_difficulty.SetString(g_cSVDifficult_default);
+	sv_difficulty.SetString(g_cSVDifficult_cfg);
 }
 
 GameMod Game_GetMod()
 {
-	return g_eMod;
+	if(ov_runner_kid_chance.FloatValue == 1.0)
+		return GameMod_Kid;
+	else if(sv_max_runner_chance.FloatValue == 1.0 || ov_runner_chance.FloatValue == 1.0)
+		return GameMod_Runner;
+
+	return GameMod_Default;
 }
 
 GameDif Game_GetDif()
 {
-	char dif[32];
-	sv_difficulty.GetString(dif, sizeof(dif));
-	if(StrEqual(dif, "classic"))		return GameDif_Classic;
-	else if(StrEqual(dif, "casual"))	return GameDif_Casual;
-	else if(StrEqual(dif, "nightmare"))	return GameDif_Nightmare;
+	if(StrEqual(g_cSVDifficult_cfg, "classic"))		return GameDif_Classic;
+	else if(StrEqual(g_cSVDifficult_cfg, "casual"))	return GameDif_Casual;
+	else if(StrEqual(g_cSVDifficult_cfg, "nightmare"))	return GameDif_Nightmare;
 
 	return GameDif_Default;
 }
 
 public Action Cmd_InfoShow(int client, int args)
 {
-	if(!g_bEnable) PrintToChat(client, "\x04%T\x01 %T", "ChatFlag", client, "ModDisable", client);
+	if(!g_bEnable_cfg) PrintToChat(client, "\x04%T\x01 %T", "ChatFlag", client, "ModDisable", client);
 	else GameInfo_ShowToClient(client);
 
 	return Plugin_Handled;
@@ -380,7 +406,7 @@ public int MenuHandler_TopMenu(Menu menu, MenuAction action, int client, int par
 
 bool Game_CanEnable(const int client)
 {
-	if(!g_bEnable)
+	if(!g_bEnable_cfg)
 	{
 		PrintToChat(client, "\x04%T\x01 %T", "ChatFlag", client, "ModDisable", client);
 		return false;
@@ -431,7 +457,7 @@ bool TestVoteDelay(int client)
 
 float GetVotePercent(int votes, int totalVotes)
 {
-	return FloatDiv(float(votes), float(totalVotes));
+	return float(votes) / float(totalVotes);
 }
 
 void ModMenu_Vote(const int client, GameMod mod)
