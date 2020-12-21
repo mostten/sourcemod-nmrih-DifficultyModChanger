@@ -82,6 +82,7 @@ ConVar sv_max_runner_chance,
 	g_cfg_realism,
 	g_cfg_hardcore,
 	g_cfg_difficulty;
+
 bool g_bEnable;
 float g_fMax_runner_chance_default,
 	g_fRunner_chance_default,
